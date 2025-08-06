@@ -2,6 +2,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Home, FileText, Activity, LogOut, PlusCircle } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClientBrowser } from '@/lib/supabase/client';
@@ -41,7 +42,14 @@ export default function ClientLayout({
       {/* Top header for mobile */}
       <header className="lg:hidden bg-white/80 backdrop-blur-md shadow-lg p-4" style={{borderBottom: '1px solid #dfe3ee'}}>
         <Link href="/dashboard" className="flex items-center space-x-3">
-          <h2 className="text-xl font-bold" style={{background: 'linear-gradient(90deg, #3b5998 0%, #8b9dc3 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>Gaushala</h2>
+          <Image
+            src="/Gaushala-logo3.png"
+            alt="Shree Govansh Raksha Samiti Gaushala"
+            width={140}
+            height={40}
+            className="h-14 w-auto object-contain"
+            priority
+          />
         </Link>
       </header>
 
@@ -50,7 +58,14 @@ export default function ClientLayout({
         <aside className="hidden lg:flex w-72 bg-white/90 backdrop-blur-md shadow-2xl flex-col" style={{borderRight: '1px solid #dfe3ee'}}>
           <div className="p-6" style={{borderBottom: '1px solid #dfe3ee'}}>
             <Link href="/dashboard" className="flex items-center space-x-3 group">
-              <h2 className="text-2xl font-bold" style={{background: 'linear-gradient(90deg, #3b5998 0%, #8b9dc3 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>Gaushala</h2>
+              <Image
+                src="/Gaushala-logo3.png"
+                alt="Shree Govansh Raksha Samiti Gaushala"
+                width={200}
+                height={60}
+                className="h-16 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+                priority
+              />
             </Link>
           </div>
           <nav className="flex-1 px-4 py-6 space-y-3">
@@ -162,4 +177,4 @@ export default function ClientLayout({
   );
 
   return renderContent();
-} 
+}
