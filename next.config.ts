@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
+    // Enable optimized package imports for faster builds
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
   eslint: {
     // Warning: This allows production builds to successfully complete even if
@@ -21,11 +23,17 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['localhost', 'qzxwgfkjwwsklhwqfwxr.supabase.co'],
+    // Use remotePatterns instead of deprecated domains
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**.supabase.co',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
         port: '',
         pathname: '/**',
       },

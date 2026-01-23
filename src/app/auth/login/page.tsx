@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { createClientBrowser } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,43 +20,110 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
   const supabase = createClientBrowser();
 
-  useEffect(() => {
-    // Initialize database setup
-    const initDb = async () => {
-      try {
-        await fetch("/api/direct-setup");
-      } catch (error) {
-        console.error("Error initializing database:", error);
-      }
-    };
-
-    initDb();
-  }, []);
+  // Database setup is handled once during deployment
+  // No need to call setup APIs on every login page load
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    // Hardcoded credentials
+    const HARDCODED_EMAIL = "admin@gaushala.com";
+    const HARDCODED_PASSWORD = "admin@123";
 
-      if (error) {
-        setError(error.message);
-      } else if (data.user) {
-        router.refresh();
-        router.push("/dashboard");
+    try {
+      // Trim email to handle whitespace
+      const trimmedEmail = email.trim().toLowerCase();
+      const trimmedPassword = password.trim();
+
+      // Check if credentials match hardcoded values
+      if (trimmedEmail === HARDCODED_EMAIL.toLowerCase() && trimmedPassword === HARDCODED_PASSWORD) {
+        console.log("Credentials match, attempting Supabase login...");
+        
+        // Sign in with Supabase using hardcoded credentials
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: HARDCODED_EMAIL,
+          password: HARDCODED_PASSWORD,
+        });
+
+        if (error) {
+          console.error("Supabase login error:", error);
+          console.error("Error details:", JSON.stringify(error, null, 2));
+          
+          // If it's an invalid credentials error, try to reset the password
+          if (error.message.includes("Invalid login credentials") || error.message.includes("Invalid login")) {
+            console.log("Attempting to reset admin password...");
+            try {
+              const resetResponse = await fetch("/api/reset-admin-password", { method: "POST" });
+              const resetData = await resetResponse.json();
+              
+              if (resetData.success) {
+                console.log("Password reset successful, retrying login...");
+                // Retry login after password reset
+                const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+                  email: HARDCODED_EMAIL,
+                  password: HARDCODED_PASSWORD,
+                });
+                
+                if (retryError) {
+                  setError("Invalid email or password. Please check your credentials.");
+                } else if (retryData?.user) {
+                  console.log("Login successful after password reset");
+                  await new Promise((resolve) => setTimeout(resolve, 200));
+                  const { data: sessionData } = await supabase.auth.getSession();
+                  if (sessionData?.session) {
+                    window.location.href = "/dashboard";
+                    return;
+                  }
+                }
+              } else {
+                setError("Invalid email or password. Please check your credentials.");
+              }
+            } catch (resetError) {
+              console.error("Error resetting password:", resetError);
+              setError("Invalid email or password. Please check your credentials.");
+            }
+          } else if (error.message.includes("Email not confirmed") || error.message.includes("email")) {
+            setError("Please verify your email address before signing in.");
+          } else {
+            setError(error.message || "Failed to sign in. Please try again.");
+          }
+        } else if (data?.user) {
+          console.log("Login successful, user:", data.user.email);
+          
+          // Wait a moment for session to be set in cookies
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          
+          // Verify session was set
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session) {
+            console.log("Session confirmed, redirecting...");
+            // Redirect to dashboard
+            window.location.href = "/dashboard";
+          } else {
+            console.error("Session not set after login");
+            setError("Session not established. Please try again.");
+            setLoading(false);
+          }
+        } else {
+          console.error("Login succeeded but no user data returned");
+          setError("Login failed. Please try again.");
+        }
+      } else {
+        setError("Invalid email or password");
       }
     } catch (err) {
-      setError("An unexpected error occurred");
+      console.error("Login error:", err);
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(`An unexpected error occurred: ${errorMessage}. Please try again.`);
     } finally {
-      setLoading(false);
+      // Only set loading to false if we're not redirecting
+      if (!error || error.includes("Session not established")) {
+        setLoading(false);
+      }
     }
   };
 
@@ -163,7 +229,38 @@ export default function LoginPage() {
                 <hr />
                 {error && (
                   <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription>
+                      {error}
+                      {error.includes("Invalid email or password") && (
+                        <div className="mt-2 text-sm">
+                          <p className="font-semibold">Troubleshooting:</p>
+                          <ul className="list-disc list-inside mt-1 space-y-1">
+                            <li>Make sure you&apos;re using: admin@gaushala.com / admin@123</li>
+                            <li>The password may need to be reset in Supabase Dashboard</li>
+                            <li>Check the browser console (F12) for detailed error messages</li>
+                          </ul>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const response = await fetch("/api/reset-admin-password", { method: "POST" });
+                                const data = await response.json();
+                                if (data.success) {
+                                  setError("Password reset successful! Please try logging in again.");
+                                } else {
+                                  setError(`Password reset failed: ${data.error}. You may need to set SUPABASE_SERVICE_ROLE_KEY in your environment variables.`);
+                                }
+                              } catch {
+                                setError("Failed to reset password. Please check your Supabase configuration.");
+                              }
+                            }}
+                            className="mt-2 text-xs underline text-blue-600 hover:text-blue-800"
+                          >
+                            Click here to reset admin password
+                          </button>
+                        </div>
+                      )}
+                    </AlertDescription>
                   </Alert>
                 )}
                 <Button

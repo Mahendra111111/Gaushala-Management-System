@@ -18,6 +18,7 @@ functions/node_modules/
 # next.js
 /.next/
 /out/
+functions/.next/
 
 # production
 /build
@@ -41,6 +42,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+functions/package-lock.json
 
 # firebase
 .firebase/

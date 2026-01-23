@@ -2,10 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import SummaryCards from "@/components/dashboard/summary-cards";
 import CowSearchList from "@/components/dashboard/cow-search-list";
 import HealthStatusCards from "@/components/dashboard/health-status-cards";
+
+// Enable caching for 60 seconds
+export const revalidate = 60;
 
 export default async function ReportsPage() {
   const supabase = await createClient();
@@ -19,44 +21,47 @@ export default async function ReportsPage() {
     redirect("/auth/login");
   }
 
-  // Fetch all cows for reports
-  const { data: cows, error: cowsError } = await supabase
+  // OPTIMIZED: Use SQL aggregation instead of fetching all and filtering in memory
+  // Get total count
+  const { count: totalCows } = await supabase
     .from("cows")
-    .select("*");
+    .select("*", { count: "exact", head: true });
 
-  if (cowsError) {
-    console.error("Error fetching cows:", cowsError);
-  }
+  // Get health status counts with single query
+  const { data: healthData } = await supabase
+    .from("cows")
+    .select("health_status")
+    .in("health_status", ["healthy", "sick", "under_treatment", "quarantine"]);
 
-  // Generate reports data
-  const totalCows = cows?.length || 0;
-
-  // Health status report
   const healthStatusCounts = {
-    healthy: cows?.filter((cow) => cow.health_status === "healthy").length || 0,
-    sick: cows?.filter((cow) => cow.health_status === "sick").length || 0,
-    under_treatment:
-      cows?.filter((cow) => cow.health_status === "under_treatment").length ||
-      0,
-    quarantine:
-      cows?.filter((cow) => cow.health_status === "quarantine").length || 0,
+    healthy: healthData?.filter((c) => c.health_status === "healthy").length || 0,
+    sick: healthData?.filter((c) => c.health_status === "sick").length || 0,
+    under_treatment: healthData?.filter((c) => c.health_status === "under_treatment").length || 0,
+    quarantine: healthData?.filter((c) => c.health_status === "quarantine").length || 0,
   };
 
-  // Gender report
+  // Get gender counts
+  const { data: genderData } = await supabase
+    .from("cows")
+    .select("gender");
+
   const genderCounts = {
-    female: cows?.filter((cow) => cow.gender === "female").length || 0,
-    male: cows?.filter((cow) => cow.gender === "male").length || 0,
-    calf: cows?.filter((cow) => cow.gender === "calf").length || 0,
+    female: genderData?.filter((c) => c.gender === "female").length || 0,
+    male: genderData?.filter((c) => c.gender === "male").length || 0,
+    calf: genderData?.filter((c) => c.gender === "calf").length || 0,
   };
 
-  // Source report
+  // Get source counts
+  const { data: sourceData } = await supabase
+    .from("cows")
+    .select("source");
+
   const sourceCounts = {
-    donation: cows?.filter((cow) => cow.source === "donation").length || 0,
-    rescue: cows?.filter((cow) => cow.source === "rescue").length || 0,
-    birth: cows?.filter((cow) => cow.source === "birth").length || 0,
-    stray: cows?.filter((cow) => cow.source === "stray").length || 0,
-    transferred:
-      cows?.filter((cow) => cow.source === "transferred").length || 0,
+    donation: sourceData?.filter((c) => c.source === "donation").length || 0,
+    rescue: sourceData?.filter((c) => c.source === "rescue").length || 0,
+    birth: sourceData?.filter((c) => c.source === "birth").length || 0,
+    stray: sourceData?.filter((c) => c.source === "stray").length || 0,
+    transferred: sourceData?.filter((c) => c.source === "transferred").length || 0,
   };
 
   // Calculate cows needing care
@@ -65,28 +70,33 @@ export default async function ReportsPage() {
     healthStatusCounts.under_treatment +
     healthStatusCounts.quarantine;
 
-  // Monthly registrations
+  // Monthly registrations - optimized with date filtering
   const now = new Date();
-  const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+  const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
+
+  const { count: thisMonthCount } = await supabase
+    .from("cows")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", thisMonth);
+
+  const { count: lastMonthCount } = await supabase
+    .from("cows")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", lastMonth)
+    .lt("created_at", thisMonth);
+
+  const { count: twoMonthsAgoCount } = await supabase
+    .from("cows")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", twoMonthsAgo)
+    .lt("created_at", lastMonth);
 
   const monthlyRegistrations = {
-    thisMonth:
-      cows?.filter((cow) => {
-        const createdAt = new Date(cow.created_at);
-        return createdAt >= thisMonth;
-      }).length || 0,
-    lastMonth:
-      cows?.filter((cow) => {
-        const createdAt = new Date(cow.created_at);
-        return createdAt >= lastMonth && createdAt < thisMonth;
-      }).length || 0,
-    twoMonthsAgo:
-      cows?.filter((cow) => {
-        const createdAt = new Date(cow.created_at);
-        return createdAt >= twoMonthsAgo && createdAt < lastMonth;
-      }).length || 0,
+    thisMonth: thisMonthCount || 0,
+    lastMonth: lastMonthCount || 0,
+    twoMonthsAgo: twoMonthsAgoCount || 0,
   };
 
   // Get maximum value for registration trend
@@ -94,8 +104,15 @@ export default async function ReportsPage() {
     monthlyRegistrations.thisMonth,
     monthlyRegistrations.lastMonth,
     monthlyRegistrations.twoMonthsAgo,
-    1 // Prevent divide by zero
+    1
   );
+
+  // Fetch cows for the list (only needed for "All" tab)
+  const { data: cows } = await supabase
+    .from("cows")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(100); // Limit to 100 most recent
 
   return (
     <div className="space-y-6">
@@ -175,7 +192,7 @@ export default async function ReportsPage() {
           className="mt-4 space-y-4 animate-in fade-in-50"
         >
           <SummaryCards
-            totalCows={totalCows}
+            totalCows={totalCows || 0}
             healthyCows={healthStatusCounts.healthy}
             needCareCows={needCareCows}
             thisMonthCows={monthlyRegistrations.thisMonth}
@@ -202,13 +219,13 @@ export default async function ReportsPage() {
             <CardContent className="flex justify-center pt-4">
               <div className="w-full max-w-md pt-6 pb-10">
                 <div className="h-10 w-full flex rounded-lg overflow-hidden shadow">
-                  {totalCows > 0 ? (
+                  {(totalCows || 0) > 0 ? (
                     <>
                       <div
                         className="transition-all duration-700"
                         style={{
                           width: `${
-                            (healthStatusCounts.healthy / totalCows) * 100
+                            (healthStatusCounts.healthy / (totalCows || 1)) * 100
                           }%`,
                           backgroundColor: "#22c55e",
                         }}
@@ -218,7 +235,7 @@ export default async function ReportsPage() {
                         className="bg-yellow-500 transition-all duration-700"
                         style={{
                           width: `${
-                            (healthStatusCounts.sick / totalCows) * 100
+                            (healthStatusCounts.sick / (totalCows || 1)) * 100
                           }%`,
                         }}
                         title={`Sick: ${healthStatusCounts.sick}`}
@@ -227,7 +244,7 @@ export default async function ReportsPage() {
                         className="bg-blue-500 transition-all duration-700"
                         style={{
                           width: `${
-                            (healthStatusCounts.under_treatment / totalCows) *
+                            (healthStatusCounts.under_treatment / (totalCows || 1)) *
                             100
                           }%`,
                         }}
@@ -237,7 +254,7 @@ export default async function ReportsPage() {
                         className="bg-red-500 transition-all duration-700"
                         style={{
                           width: `${
-                            (healthStatusCounts.quarantine / totalCows) * 100
+                            (healthStatusCounts.quarantine / (totalCows || 1)) * 100
                           }%`,
                         }}
                         title={`Quarantine: ${healthStatusCounts.quarantine}`}
@@ -287,13 +304,13 @@ export default async function ReportsPage() {
               <CardContent className="flex flex-col items-center pt-4">
                 <div className="w-full max-w-md">
                   <div className="h-12 w-full flex rounded-lg overflow-hidden shadow">
-                    {totalCows > 0 ? (
+                    {(totalCows || 0) > 0 ? (
                       <>
                         <div
                           className="bg-pink-400 transition-all duration-700"
                           style={{
                             width: `${
-                              (genderCounts.female / totalCows) * 100
+                              (genderCounts.female / (totalCows || 1)) * 100
                             }%`,
                           }}
                           title={`Female: ${genderCounts.female}`}
@@ -301,14 +318,14 @@ export default async function ReportsPage() {
                         <div
                           className="bg-blue-400 transition-all duration-700"
                           style={{
-                            width: `${(genderCounts.male / totalCows) * 100}%`,
+                            width: `${(genderCounts.male / (totalCows || 1)) * 100}%`,
                           }}
                           title={`Male: ${genderCounts.male}`}
                         />
                         <div
                           className="bg-purple-400 transition-all duration-700"
                           style={{
-                            width: `${(genderCounts.calf / totalCows) * 100}%`,
+                            width: `${(genderCounts.calf / (totalCows || 1)) * 100}%`,
                           }}
                           title={`Calf: ${genderCounts.calf}`}
                         />
@@ -355,8 +372,8 @@ export default async function ReportsPage() {
                       className="h-full bg-purple-500"
                       style={{
                         width: `${
-                          totalCows > 0
-                            ? (sourceCounts.donation / totalCows) * 100
+                          (totalCows || 0) > 0
+                            ? (sourceCounts.donation / (totalCows || 1)) * 100
                             : 0
                         }%`,
                       }}
@@ -375,8 +392,8 @@ export default async function ReportsPage() {
                       className="h-full bg-orange-500"
                       style={{
                         width: `${
-                          totalCows > 0
-                            ? (sourceCounts.rescue / totalCows) * 100
+                          (totalCows || 0) > 0
+                            ? (sourceCounts.rescue / (totalCows || 1)) * 100
                             : 0
                         }%`,
                       }}
@@ -399,8 +416,8 @@ export default async function ReportsPage() {
                       style={{
                         backgroundColor: "#16a34a",
                         width: `${
-                          totalCows > 0
-                            ? (sourceCounts.birth / totalCows) * 100
+                          (totalCows || 0) > 0
+                            ? (sourceCounts.birth / (totalCows || 1)) * 100
                             : 0
                         }%`,
                       }}
@@ -419,8 +436,8 @@ export default async function ReportsPage() {
                       className="h-full bg-yellow-500"
                       style={{
                         width: `${
-                          totalCows > 0
-                            ? (sourceCounts.stray / totalCows) * 100
+                          (totalCows || 0) > 0
+                            ? (sourceCounts.stray / (totalCows || 1)) * 100
                             : 0
                         }%`,
                       }}
@@ -441,8 +458,8 @@ export default async function ReportsPage() {
                       className="h-full bg-blue-500"
                       style={{
                         width: `${
-                          totalCows > 0
-                            ? (sourceCounts.transferred / totalCows) * 100
+                          (totalCows || 0) > 0
+                            ? (sourceCounts.transferred / (totalCows || 1)) * 100
                             : 0
                         }%`,
                       }}

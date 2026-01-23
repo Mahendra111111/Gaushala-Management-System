@@ -6,9 +6,9 @@ export async function middleware(request: NextRequest) {
     request,
   })
 
-  // Use the environment variables directly
-  const supabaseUrl = 'https://enpplseddbfstmefufee.supabase.co'
-  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucHBsc2VkZGJmc3RtZWZ1ZmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNTgyMDUsImV4cCI6MjA2NTYzNDIwNX0.TxFqh1lGx91iKIOIZC-qnjT6n0s1jnBGH9R8SXMwCAE'
+  // Use the correct Supabase project URL and key
+  const supabaseUrl = 'https://dxkvwzuattslquqiuncq.supabase.co'
+  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4a3Z3enVhdHRzbHF1cWl1bmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MTk2MTEsImV4cCI6MjA4NDM5NTYxMX0.L9IEiIiz6PYzoH7G_eoVnTbDafNPGc7Dy4jzI5DjkJ8'
 
   const supabase = createServerClient(
     supabaseUrl,
@@ -64,6 +64,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 } 

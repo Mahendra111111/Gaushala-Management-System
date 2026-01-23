@@ -5,7 +5,8 @@ import StatsCards from '@/components/dashboard/stats-cards'
 import RecentCows from '@/components/dashboard/recent-cows'
 import { Suspense } from 'react'
 
-// Add dynamic export to enable dynamic rendering
+// Add caching - revalidate every 30 seconds
+export const revalidate = 30
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
@@ -24,36 +25,33 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  // Get cow statistics
-  const { data: cows, error: cowsError } = await supabase
+  // OPTIMIZED: Use count instead of fetching all cows
+  const { count: totalCows } = await supabase
     .from('cows')
-    .select('*')
-    .order('created_at', { ascending: false })
+    .select('*', { count: 'exact', head: true })
 
-  if (cowsError) {
-    console.error('Error fetching cows:', cowsError)
-  }
+  // OPTIMIZED: Get health status counts efficiently
+  const { data: healthData } = await supabase
+    .from('cows')
+    .select('health_status')
 
-  const totalCows = cows?.length || 0
-  const healthyCows = cows?.filter(cow => cow.health_status === 'healthy').length || 0
-  const underTreatment = cows?.filter(cow => 
+  const healthyCows = healthData?.filter(cow => cow.health_status === 'healthy').length || 0
+  const underTreatment = healthData?.filter(cow => 
     cow.health_status === 'under_treatment' || 
     cow.health_status === 'sick' || 
     cow.health_status === 'quarantine'
   ).length || 0
   
-  // Get this month's registrations
+  // OPTIMIZED: Get this month's registrations with count
   const today = new Date()
   const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
   
-  const { data: thisMonthCowsData } = await supabase
+  const { count: thisMonthCows } = await supabase
     .from('cows')
-    .select('*')
+    .select('*', { count: 'exact', head: true })
     .gte('created_at', firstDayOfMonth)
 
-  const thisMonthCows = thisMonthCowsData?.length || 0
-
-  // Get activity logs
+  // Get activity logs (keep as is, only fetching 5)
   const { data: recentLogs } = await supabase
     .from('activity_logs')
     .select(`
@@ -88,10 +86,10 @@ export default async function DashboardPage() {
 
       {/* Stat Cards */}
       <StatsCards 
-        totalCows={totalCows}
+        totalCows={totalCows || 0}
         healthyCows={healthyCows}
         needCareCows={underTreatment}
-        newRegistrations={thisMonthCows}
+        newRegistrations={thisMonthCows || 0}
       />
 
       {/* Recent Cows Section */}

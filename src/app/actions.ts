@@ -14,52 +14,22 @@ export async function createBucketIfNotExists() {
   const supabase = await createClient()
   
   try {
-    // Check if bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets()
-    
-    if (!buckets?.find(bucket => bucket.name === 'cow-images')) {
-      // Create the bucket
-      const { error } = await supabase.storage.createBucket('cow-images', {
-        public: true,
-        fileSizeLimit: 10 * 1024 * 1024, // 10MB limit
-      })
-      
-      if (error) {
-        // If we get an RLS policy error, suggest using the fix-bucket page
-        if (error.message.includes('row-level security policy')) {
-          console.error('RLS policy error creating bucket:', error)
-          return { 
-            success: false, 
-            error: 'Storage bucket needs RLS policy setup. Please visit /fix-bucket to fix this issue.' 
-          }
-        }
-        
-        console.error('Error creating bucket:', error)
-        return { success: false, error: error.message }
-      }
-    }
-    
-    // Test if we can access the bucket
+    // The bucket already exists with proper RLS policies
+    // Just verify we can access it
     try {
       const { data } = supabase.storage.from('cow-images').getPublicUrl('test.txt')
       if (!data) {
         return { success: false, error: 'Failed to verify bucket access' }
       }
-    } catch (accessError: any) {
+    } catch (accessError: unknown) {
       console.error('Error testing bucket access:', accessError)
       return { success: false, error: 'Failed to verify bucket access' }
     }
     
     return { success: true }
-  } catch (error: any) {
+    } catch (error: unknown) {
     console.error('Error in createBucketIfNotExists:', error)
-    if (error.message?.includes('row-level security policy')) {
-      return { 
-        success: false, 
-        error: 'Storage bucket needs RLS policy setup. Please visit /fix-bucket to fix this issue.' 
-      }
-    }
-    return { success: false, error: error.message || 'Unknown error' }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -67,26 +37,8 @@ export async function uploadImage(file: File) {
   const supabase = await createClient()
   
   try {
-    // Check if bucket exists first
-    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets()
-    
-    if (bucketError) {
-      console.error('Error listing buckets:', bucketError)
-      return { success: false, error: `Failed to list buckets: ${bucketError.message}` }
-    }
-    
-    // Create the bucket if it doesn't exist
-    if (!buckets?.some(bucket => bucket.name === 'cow-images')) {
-      const { error: createError } = await supabase.storage.createBucket('cow-images', {
-        public: true,
-        fileSizeLimit: 10 * 1024 * 1024, // 10MB limit
-      })
-      
-      if (createError) {
-        console.error('Error creating bucket:', createError)
-        // Continue anyway - the bucket might exist but with RLS preventing listing
-      }
-    }
+    // The bucket already exists with proper RLS policies
+    // No need to check or create it - just proceed with upload
     
     if (!file || file.size === 0) {
       return { success: true, photoUrl: null }
@@ -116,7 +68,7 @@ export async function uploadImage(file: File) {
         .getPublicUrl(uploadData.path)
       
       return { success: true, photoUrl: urlData.publicUrl }
-    } catch (uploadError: any) {
+    } catch (uploadError: unknown) {
       console.error('Direct upload failed:', uploadError)
       
       // Method 2: Try using a presigned URL
@@ -152,7 +104,7 @@ export async function uploadImage(file: File) {
           .getPublicUrl(signedUrlData.path)
         
         return { success: true, photoUrl: urlData.publicUrl }
-      } catch (signedError: any) {
+      } catch (signedError: unknown) {
         console.error('Error with signed URL upload:', signedError)
         
         // Method 3: Try server-side upload API - use absolute path that works in both client and server
@@ -179,7 +131,7 @@ export async function uploadImage(file: File) {
           }
           
           return { success: true, photoUrl: data.photoUrl }
-        } catch (serverError: any) {
+        } catch (serverError: unknown) {
           console.error('Error with server upload:', serverError)
           
           // Method 4: Last resort - direct filesystem fallback
@@ -202,16 +154,16 @@ export async function uploadImage(file: File) {
             }
             
             return { success: false, error: 'All upload methods failed. Please try again later.' }
-          } catch (fallbackError: any) {
+          } catch (fallbackError: unknown) {
             console.error('Fallback upload error:', fallbackError)
             return { success: false, error: 'All upload methods failed. Please try again later.' }
           }
         }
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in uploadImage:', error)
-    return { success: false, error: error.message || 'Unknown error' }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -305,7 +257,7 @@ export async function registerCowAction(formData: FormData) {
         },
         created_at: new Date().toISOString()
       })
-    } catch (logError) {
+    } catch (logError: unknown) {
       console.error('Error logging activity:', logError)
       // Continue execution even if logging fails
     }
@@ -313,7 +265,7 @@ export async function registerCowAction(formData: FormData) {
     revalidatePath('/dashboard')
     return { success: true, cowId: cow.id }
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in registerCowAction:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
@@ -395,7 +347,7 @@ export async function updateCowAction(cowId: string, formData: FormData) {
           update_date: new Date().toISOString()
         }
       })
-    } catch (logError) {
+    } catch (logError: unknown) {
       console.error('Error logging activity:', logError)
       // Continue execution even if logging fails
     }
@@ -404,7 +356,7 @@ export async function updateCowAction(cowId: string, formData: FormData) {
     revalidatePath(`/dashboard/cows/${cowId}`)
     return { success: true }
     
-  } catch (error) {
+  } catch (error: unknown ) {
     console.error('Error in updateCowAction:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
