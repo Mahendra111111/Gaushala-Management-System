@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start -p 3050",
     "lint": "next lint",
-    "firebase:deploy": "firebase deploy --only hosting",
-    "deploy": "next build && firebase deploy --only hosting"
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "preview": "npm run pages:build && wrangler pages dev",
+    "deploy": "npm run pages:build && wrangler pages deploy",
+    "cf:deploy": "npm run pages:build && wrangler pages deploy",
+    "firebase:deploy": "firebase deploy --only hosting"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",
