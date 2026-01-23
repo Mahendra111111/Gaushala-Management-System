@@ -39,6 +39,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Disable output file tracing for Cloudflare
+  output: 'standalone',
 };
 
 export default nextConfig;
