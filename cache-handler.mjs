@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   async get(key) {
     // Implement your caching logic here
     return null;
